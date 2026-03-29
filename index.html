@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة تحكم المخزون — تحديث تلقائي</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e1a;
+  --surface: #111827;
+  --surface2: #1a2235;
+  --border: #1e2d40;
+  --expired: #ff3a5c;
+  --critical: #ff7a1a;
+  --warning: #f5c518;
+  --caution: #4fc3f7;
+  --ok: #26d987;
+  --text: #e8eaf6;
+  --muted: #7b8ba8;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'IBM Plex Sans Arabic', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ===== UPLOAD SCREEN ===== */
+#upload-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 40px;
+  gap: 32px;
+}
+.upload-logo {
+  font-size: 3rem;
+  margin-bottom: 8px;
+}
+.upload-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #4fc3f7, #818cf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-align: center;
+}
+.upload-sub {
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+.drop-zone {
+  width: 480px;
+  max-width: 100%;
+  border: 2px dashed var(--border);
+  border-radius: 16px;
+  padding: 48px 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: var(--surface);
+  position: relative;
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: #4fc3f7;
+  background: rgba(79,195,247,0.05);
+  transform: translateY(-2px);
+}
+.drop-icon { font-size: 3rem; margin-bottom: 16px; }
+.drop-text { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+.drop-hint { color: var(--muted); font-size: 0.82rem; }
+#file-input { display: none; }
+.upload-btn {
+  margin-top: 20px;
+  padding: 12px 32px;
+  background: linear-gradient(135deg, #4fc3f7, #818cf8);
+  border: none;
+  border-radius: 10px;
+  color: #0a0e1a;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.2s;
+}
+.upload-btn:hover { opacity: 0.85; }
+.supported-formats {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-top: 12px;
+}
+.format-chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+.chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 3px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.loading-bar {
+  display: none;
+  width: 480px;
+  max-width: 100%;
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.loading-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4fc3f7, #818cf8);
+  width: 0%;
+  transition: width 0.5s;
+  border-radius: 2px;
+}
+.error-msg {
+  color: var(--expired);
+  font-size: 0.85rem;
+  display: none;
+  background: rgba(255,58,92,0.1);
+  border: 1px solid rgba(255,58,92,0.3);
+  padding: 10px 20px;
+  border-radius: 8px;
+}
+
+/* ===== DASHBOARD ===== */
+#dashboard { display: none; padding: 24px; }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.header-title h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #4fc3f7, #818cf8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.header-title p { color: var(--muted); font-size: 0.82rem; margin-top: 3px; }
+.header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.reload-btn {
+  padding: 8px 18px;
+  background: linear-gradient(135deg, #4fc3f7, #818cf8);
+  border: none;
+  border-radius: 8px;
+  color: #0a0e1a;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+.reload-btn:hover { opacity: 0.85; }
+.date-badge {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.file-badge {
+  background: rgba(38,217,135,0.1);
+  border: 1px solid rgba(38,217,135,0.3);
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: var(--ok);
+}
+
+/* KPI Grid */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.kpi-card:hover { transform: translateY(-2px); }
+.kpi-card::before { content:''; position:absolute; top:0;left:0;right:0; height:3px; }
+.kpi-card.expired::before { background: var(--expired); }
+.kpi-card.critical::before { background: var(--critical); }
+.kpi-card.warning::before { background: var(--warning); }
+.kpi-card.caution::before { background: var(--caution); }
+.kpi-card.ok::before { background: var(--ok); }
+.kpi-card.expired { border-color: rgba(255,58,92,0.3); }
+.kpi-card.critical { border-color: rgba(255,122,26,0.3); }
+.kpi-card.warning { border-color: rgba(245,197,24,0.3); }
+.kpi-card.caution { border-color: rgba(79,195,247,0.3); }
+.kpi-card.ok { border-color: rgba(38,217,135,0.3); }
+.kpi-label { font-size: 0.75rem; color: var(--muted); margin-bottom: 6px; }
+.kpi-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+.kpi-card.expired .kpi-value { color: var(--expired); }
+.kpi-card.critical .kpi-value { color: var(--critical); }
+.kpi-card.warning .kpi-value { color: var(--warning); }
+.kpi-card.caution .kpi-value { color: var(--caution); }
+.kpi-card.ok .kpi-value { color: var(--ok); }
+.kpi-sub { font-size: 0.72rem; color: var(--muted); margin-top: 5px; }
+
+/* Charts Row */
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.chart-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.donut-wrap { display: flex; align-items: center; gap: 16px; }
+.donut-legend { flex: 1; }
+.legend-item { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; font-size: 0.78rem; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.legend-name { flex: 1; color: var(--muted); }
+.hbar { margin-bottom: 8px; }
+.hbar-label { display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 3px; color: var(--muted); }
+.hbar-track { height: 7px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+.hbar-fill { height: 100%; border-radius: 4px; }
+.timeline-bars { display: flex; align-items: flex-end; gap: 3px; height: 70px; }
+.tbar { flex: 1; border-radius: 3px 3px 0 0; min-height: 3px; cursor: pointer; transition: opacity 0.2s; }
+.tbar:hover { opacity: 0.7; }
+.tbar-labels { display: flex; justify-content: space-between; font-size: 0.62rem; color: var(--muted); margin-top: 5px; }
+
+/* Filters */
+.filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+.filter-btn {
+  padding: 5px 12px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.filter-btn:hover { border-color: #4fc3f7; color: #4fc3f7; }
+.filter-btn.active { background: rgba(79,195,247,0.1); border-color: #4fc3f7; color: #4fc3f7; }
+.filter-btn.f-expired.active { border-color: var(--expired); color: var(--expired); background: rgba(255,58,92,0.1); }
+.filter-btn.f-critical.active { border-color: var(--critical); color: var(--critical); background: rgba(255,122,26,0.1); }
+.filter-btn.f-warning.active { border-color: var(--warning); color: var(--warning); background: rgba(245,197,24,0.1); }
+.filter-btn.f-caution.active { border-color: var(--caution); color: var(--caution); background: rgba(79,195,247,0.1); }
+.search-box {
+  margin-right: auto;
+  padding: 5px 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.78rem;
+  width: 200px;
+  outline: none;
+  font-family: inherit;
+}
+.search-box::placeholder { color: var(--muted); }
+.search-box:focus { border-color: #4fc3f7; }
+
+/* Table */
+.table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.table-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.table-header h3 { font-size: 0.88rem; font-weight: 600; }
+.table-count { font-size: 0.78rem; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; }
+thead tr { background: var(--surface2); }
+th { padding: 9px 12px; font-size: 0.72rem; font-weight: 600; color: var(--muted); text-align: right; white-space: nowrap; cursor: pointer; user-select: none; }
+th:hover { color: #4fc3f7; }
+td { padding: 10px 12px; font-size: 0.78rem; border-bottom: 1px solid rgba(30,45,64,0.5); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.02); }
+.status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; white-space: nowrap; }
+.badge-expired { background: rgba(255,58,92,0.15); color: var(--expired); border: 1px solid rgba(255,58,92,0.3); animation: pulse 2s infinite; }
+.badge-critical { background: rgba(255,122,26,0.15); color: var(--critical); border: 1px solid rgba(255,122,26,0.3); }
+.badge-warning { background: rgba(245,197,24,0.15); color: var(--warning); border: 1px solid rgba(245,197,24,0.3); }
+.badge-caution { background: rgba(79,195,247,0.15); color: var(--caution); border: 1px solid rgba(79,195,247,0.3); }
+.days-pill { font-weight: 700; font-size: 0.82rem; }
+.days-expired { color: var(--expired); }
+.days-critical { color: var(--critical); }
+.days-warning { color: var(--warning); }
+.days-caution { color: var(--caution); }
+.sheet-tag { background: var(--surface2); padding: 2px 7px; border-radius: 4px; font-size: 0.7rem; color: var(--muted); border: 1px solid var(--border); }
+.pagination { display: flex; justify-content: center; align-items: center; gap: 7px; padding: 14px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.pg-btn { padding: 4px 11px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-size: 0.78rem; font-family: inherit; }
+.pg-btn:hover, .pg-btn.active { background: rgba(79,195,247,0.1); border-color: #4fc3f7; color: #4fc3f7; }
+.pg-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.pg-info { font-size: 0.78rem; color: var(--muted); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+.empty-state { text-align: center; padding: 60px; color: var(--muted); }
+.empty-state .e-icon { font-size: 3rem; margin-bottom: 12px; }
+
+/* Date range bar */
+.filter-section { margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+.date-range-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.date-range-label { font-size: 0.82rem; font-weight: 600; color: var(--text); white-space: nowrap; }
+.date-range-inputs { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.date-field { display: flex; align-items: center; gap: 6px; }
+.date-field label { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.date-field input[type="date"] {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.date-field input[type="date"]:focus, .date-field input[type="date"]:hover { border-color: #4fc3f7; }
+.date-field input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+.date-sep { color: var(--muted); font-size: 0.9rem; }
+.clear-date-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,58,92,0.3);
+  background: rgba(255,58,92,0.08);
+  color: var(--expired);
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.clear-date-btn:hover { background: rgba(255,58,92,0.2); }
+.date-presets { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.preset-label { font-size: 0.72rem; color: var(--muted); }
+.preset-btn {
+  padding: 4px 11px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 0.74rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.preset-btn:hover { border-color: #4fc3f7; color: #4fc3f7; background: rgba(79,195,247,0.08); }
+.preset-btn.preset-expired { border-color: rgba(255,58,92,0.3); color: var(--expired); }
+.preset-btn.preset-expired:hover { background: rgba(255,58,92,0.1); }
+.date-filter-indicator {
+  margin-right: auto;
+  background: rgba(79,195,247,0.1);
+  border: 1px solid rgba(79,195,247,0.3);
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  color: #4fc3f7;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.indicator-count {
+  background: #4fc3f7;
+  color: #0a0e1a;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+}
+
+/* Export button */
+.export-btn {
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(38,217,135,0.4);
+  background: rgba(38,217,135,0.1);
+  color: var(--ok);
+  font-size: 0.78rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.export-btn:hover { background: rgba(38,217,135,0.2); transform: translateY(-1px); }
+.export-btn:active { transform: translateY(0); }
+
+/* sheet info bar */
+.sheet-info { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.sheet-chip { background: var(--surface2); border: 1px solid var(--border); padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; color: var(--muted); }
+.sheet-chip span { color: var(--text); font-weight: 600; margin-right: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ===== UPLOAD SCREEN ===== -->
+<div id="upload-screen">
+  <div>
+    <div class="upload-logo">📦</div>
+  </div>
+  <div>
+    <div class="upload-title">لوحة تحكم المخزون الذكية</div>
+    <div class="upload-sub">ارفع ملف المخزون وسيتم تحليله تلقائياً وعرض الأصناف قريبة الانتهاء</div>
+  </div>
+
+  <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+    <input type="file" id="file-input" accept=".xlsx,.xls,.csv" onchange="handleFile(this.files[0])">
+    <div class="drop-icon">📂</div>
+    <div class="drop-text">اسحب الملف هنا أو انقر للاختيار</div>
+    <div class="drop-hint">يدعم ملفات Excel بجميع الأوراق تلقائياً</div>
+    <button class="upload-btn" onclick="event.stopPropagation(); document.getElementById('file-input').click()">اختر الملف</button>
+    <div class="supported-formats">الصيغ المدعومة:</div>
+    <div class="format-chips">
+      <span class="chip">📗 .xlsx</span>
+      <span class="chip">📘 .xls</span>
+      <span class="chip">📄 .csv</span>
+    </div>
+  </div>
+
+  <div class="loading-bar" id="loading-bar">
+    <div class="loading-fill" id="loading-fill"></div>
+  </div>
+  <div class="error-msg" id="error-msg"></div>
+</div>
+
+<!-- ===== DASHBOARD ===== -->
+<div id="dashboard">
+  <div class="header">
+    <div class="header-title">
+      <h1>📦 لوحة تحكم المخزون — الأصناف قريبة الانتهاء</h1>
+      <p id="header-sub">يتم تحميل البيانات...</p>
+    </div>
+    <div class="header-actions">
+      <div class="file-badge" id="file-badge">✅ </div>
+      <div class="date-badge" id="today-badge">📅 اليوم: —</div>
+      <button class="reload-btn" onclick="resetToUpload()">🔄 تحميل ملف جديد</button>
+    </div>
+  </div>
+
+  <div class="sheet-info" id="sheet-info"></div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card expired" onclick="filterByStatus('EXPIRED')">
+      <div class="kpi-label">🔴 منتهي الصلاحية</div>
+      <div class="kpi-value" id="kpi-expired">—</div>
+      <div class="kpi-sub" id="kpi-expired-pct">—</div>
+    </div>
+    <div class="kpi-card critical" onclick="filterByStatus('Critical')">
+      <div class="kpi-label">🟠 حرج (أقل من 30 يوم)</div>
+      <div class="kpi-value" id="kpi-critical">—</div>
+      <div class="kpi-sub" id="kpi-critical-pct">—</div>
+    </div>
+    <div class="kpi-card warning" onclick="filterByStatus('Warning')">
+      <div class="kpi-label">🟡 تحذير (31–90 يوم)</div>
+      <div class="kpi-value" id="kpi-warning">—</div>
+      <div class="kpi-sub" id="kpi-warning-pct">—</div>
+    </div>
+    <div class="kpi-card caution" onclick="filterByStatus('Caution')">
+      <div class="kpi-label">🔵 تنبيه (91–180 يوم)</div>
+      <div class="kpi-value" id="kpi-caution">—</div>
+      <div class="kpi-sub" id="kpi-caution-pct">—</div>
+    </div>
+    <div class="kpi-card ok" onclick="filterByStatus('ALL')">
+      <div class="kpi-label">🟢 سليم (أكثر من 180 يوم)</div>
+      <div class="kpi-value" id="kpi-ok">—</div>
+      <div class="kpi-sub" id="kpi-ok-pct">—</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">توزيع حالة المخزون</div>
+      <div class="donut-wrap">
+        <svg id="donut-svg" width="100" height="100" viewBox="0 0 100 100"></svg>
+        <div class="donut-legend" id="donut-legend"></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">الأصناف غير السليمة حسب الموقع</div>
+      <div id="location-bars"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">توزيع الانتهاء خلال 6 أشهر</div>
+      <div class="timeline-bars" id="timeline-bars"></div>
+      <div class="tbar-labels"><span>منتهي</span><span></span><span></span><span>م6</span></div>
+    </div>
+  </div>
+
+  <!-- Date Range + Filters Bar -->
+  <div class="filter-section">
+
+    <!-- Status Filters Row -->
+    <div class="filters">
+      <button class="filter-btn f-all active" id="btn-all" onclick="filterByStatus('ALL')">الكل</button>
+      <button class="filter-btn f-expired" id="btn-expired" onclick="filterByStatus('EXPIRED')">🔴 منتهي</button>
+      <button class="filter-btn f-critical" id="btn-critical" onclick="filterByStatus('Critical')">🟠 حرج</button>
+      <button class="filter-btn f-warning" id="btn-warning" onclick="filterByStatus('Warning')">🟡 تحذير</button>
+      <button class="filter-btn f-caution" id="btn-caution" onclick="filterByStatus('Caution')">🔵 تنبيه</button>
+      <input type="text" class="search-box" id="searchBox" placeholder="🔍 بحث..." oninput="applyFilters()">
+    </div>
+
+    <!-- Date Range Row -->
+    <div class="date-range-bar">
+      <div class="date-range-label">📅 فلترة بتاريخ الانتهاء:</div>
+      <div class="date-range-inputs">
+        <div class="date-field">
+          <label>من</label>
+          <input type="date" id="dateFrom" onchange="applyFilters()">
+        </div>
+        <div class="date-sep">←</div>
+        <div class="date-field">
+          <label>إلى</label>
+          <input type="date" id="dateTo" onchange="applyFilters()">
+        </div>
+        <button class="clear-date-btn" onclick="clearDateFilter()" title="مسح التواريخ">✕ مسح</button>
+      </div>
+
+      <!-- Quick Presets -->
+      <div class="date-presets">
+        <span class="preset-label">اختيار سريع:</span>
+        <button class="preset-btn" onclick="setPreset(0,7)">أسبوع</button>
+        <button class="preset-btn" onclick="setPreset(0,30)">شهر</button>
+        <button class="preset-btn" onclick="setPreset(0,90)">3 أشهر</button>
+        <button class="preset-btn" onclick="setPreset(0,180)">6 أشهر</button>
+        <button class="preset-btn preset-expired" onclick="setPresetExpired()">المنتهية فقط</button>
+      </div>
+
+      <!-- Active filter indicator -->
+      <div class="date-filter-indicator" id="dateFilterIndicator" style="display:none">
+        <span id="dateFilterText"></span>
+        <span class="indicator-count" id="dateFilterCount"></span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <h3>قائمة الأصناف حسب الفلتر المحدد</h3>
+      <div style="display:flex;gap:10px;align-items:center">
+        <div class="table-count" id="tableCount"></div>
+        <button class="export-btn" onclick="exportToExcel()" id="exportBtn">⬇️ تصدير Excel</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th onclick="sortBy('name')" style="min-width:180px">اسم الصنف ↕</th>
+          <th onclick="sortBy('days')" style="min-width:100px">الأيام المتبقية ↕</th>
+          <th onclick="sortBy('bbd')" style="min-width:100px">تاريخ الانتهاء ↕</th>
+          <th onclick="sortBy('qty')" style="min-width:80px">الكمية ↕</th>
+          <th>وحدة</th>
+          <th>الموقع / الورقة</th>
+          <th>درجة الحرارة</th>
+          <th>الحالة</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+
+<script>
+// ===================== GLOBALS =====================
+let allItems = [];
+let filtered = [];
+let currentStatus = 'ALL';
+let currentPage = 1;
+const PAGE_SIZE = 25;
+let sortCol = 'days';
+let sortDir = 1;
+let fileName = '';
+
+// ===================== DRAG & DROP =====================
+const dropZone = document.getElementById('drop-zone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if(f) handleFile(f);
+});
+
+// ===================== FILE HANDLING =====================
+function handleFile(file) {
+  if(!file) return;
+  fileName = file.name;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if(!['xlsx','xls','csv'].includes(ext)) {
+    showError('الملف غير مدعوم. الرجاء استخدام .xlsx أو .xls أو .csv');
+    return;
+  }
+  showLoading();
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array', cellDates: true });
+      parseWorkbook(wb);
+    } catch(err) {
+      showError('خطأ في قراءة الملف: ' + err.message);
+    }
+  };
+  reader.onerror = () => showError('فشل في قراءة الملف');
+  reader.readAsArrayBuffer(file);
+}
+
+function showLoading() {
+  document.getElementById('loading-bar').style.display = 'block';
+  document.getElementById('error-msg').style.display = 'none';
+  let p = 0;
+  const iv = setInterval(() => {
+    p = Math.min(p+15, 85);
+    document.getElementById('loading-fill').style.width = p+'%';
+    if(p>=85) clearInterval(iv);
+  }, 100);
+  window._loadingInterval = iv;
+}
+
+function finishLoading() {
+  clearInterval(window._loadingInterval);
+  document.getElementById('loading-fill').style.width = '100%';
+  setTimeout(() => { document.getElementById('loading-bar').style.display = 'none'; }, 400);
+}
+
+function showError(msg) {
+  finishLoading();
+  const el = document.getElementById('error-msg');
+  el.textContent = '⚠️ ' + msg;
+  el.style.display = 'block';
+}
+
+// ===================== PARSE WORKBOOK =====================
+function parseWorkbook(wb) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const items = [];
+  const sheetsInfo = {};
+
+  // Detect BBD column name variants
+  const BBD_NAMES  = ['bbd','best before','expiry','expiry date','exp date','تاريخ انتهاء','bbdate'];
+  const QTY_NAMES  = ['qty','quantity','physical check qty','physically check qty','physically check quantity','avail qty','available qty','كمية'];
+  const NAME_NAMES = ['generic item description','item description','description','اسم الصنف','name'];
+  const TRADE_NAMES= ['trade item description','trade description','trade name','الاسم التجاري'];
+  const LOC_NAMES  = ['location','موقع'];
+  const TEMP_NAMES = ['temperature code','temp','درجة الحرارة'];
+  const UOM_NAMES  = ['uom','unit','وحدة'];
+  const ITEM_NAMES = ['item no','item number','generic item number','trade item number','رقم الصنف','item_no'];
+
+  function findCol(headers, variants) {
+    for(const v of variants) {
+      const idx = headers.findIndex(h => h && h.toString().toLowerCase().trim().includes(v));
+      if(idx >= 0) return idx;
+    }
+    return -1;
+  }
+
+  for(const sheetName of wb.SheetNames) {
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+    if(rows.length < 2) continue;
+
+    // Find header row (first row with enough non-empty cells)
+    let headerRow = 0;
+    for(let i=0;i<Math.min(5,rows.length);i++) {
+      if(rows[i].filter(c=>c!=='').length > 3) { headerRow = i; break; }
+    }
+    const headers = rows[headerRow].map(h => h ? h.toString().toLowerCase().trim() : '');
+
+    const idxBBD  = findCol(headers, BBD_NAMES);
+    const idxQTY  = findCol(headers, QTY_NAMES);
+    const idxName = findCol(headers, NAME_NAMES);
+    const idxTrade= findCol(headers, TRADE_NAMES);
+    const idxLoc  = findCol(headers, LOC_NAMES);
+    const idxTemp = findCol(headers, TEMP_NAMES);
+    const idxUOM  = findCol(headers, UOM_NAMES);
+    const idxItem = findCol(headers, ITEM_NAMES);
+
+    if(idxBBD < 0) continue; // Sheet has no BBD column, skip
+
+    let sheetCount = 0;
+    for(let r = headerRow+1; r < rows.length; r++) {
+      const row = rows[r];
+      if(!row || row.every(c => c === '')) continue;
+
+      const rawBBD = idxBBD >= 0 ? row[idxBBD] : '';
+      if(!rawBBD) continue;
+
+      // Parse date
+      let bbdDate = null;
+      if(rawBBD instanceof Date) {
+        bbdDate = rawBBD;
+      } else {
+        // Try parse string
+        const str = rawBBD.toString().trim();
+        const d = new Date(str);
+        if(!isNaN(d)) bbdDate = d;
+        else {
+          // Try DD/MM/YYYY or DD-MM-YYYY
+          const parts = str.split(/[\/\-\.]/);
+          if(parts.length === 3) {
+            const a = parseInt(parts[0]), b = parseInt(parts[1]), c = parseInt(parts[2]);
+            if(c > 100) bbdDate = new Date(c, b-1, a); // DD/MM/YYYY
+            else bbdDate = new Date(a, b-1, c); // YYYY/MM/DD
+          }
+        }
+      }
+      if(!bbdDate || isNaN(bbdDate)) continue;
+
+      bbdDate.setHours(0,0,0,0);
+      const daysLeft = Math.round((bbdDate - today) / (1000*60*60*24));
+
+      const qty   = idxQTY  >= 0 ? (parseFloat(row[idxQTY])||0)  : 0;
+      const name  = idxName >= 0 ? (row[idxName]||'').toString().trim()  : 'غير محدد';
+      const trade = idxTrade>= 0 ? (row[idxTrade]||'').toString().trim() : '';
+      const loc   = idxLoc  >= 0 ? (row[idxLoc]||'').toString().trim()   : '';
+      const temp  = idxTemp >= 0 ? (row[idxTemp]||'').toString().trim()  : '';
+      const uom   = idxUOM  >= 0 ? (row[idxUOM]||'').toString().trim()   : '';
+      const itemNo= idxItem >= 0 ? (row[idxItem]||'').toString().trim()  : '';
+
+      let status;
+      if(daysLeft < 0) status = 'EXPIRED';
+      else if(daysLeft <= 30) status = 'Critical';
+      else if(daysLeft <= 90) status = 'Warning';
+      else if(daysLeft <= 180) status = 'Caution';
+      else status = 'OK';
+
+      items.push({
+        itemNo, name, trade, bbd: bbdDate,
+        bbdStr: bbdDate.toISOString().split('T')[0],
+        days: daysLeft, qty, uom, loc, temp,
+        sheet: sheetName, status
+      });
+      sheetCount++;
+    }
+    sheetsInfo[sheetName] = sheetCount;
+  }
+
+  finishLoading();
+
+  if(items.length === 0) {
+    showError('لم يتم العثور على بيانات صالحة. تأكد من وجود عمود BBD أو تاريخ انتهاء الصلاحية في الملف.');
+    return;
+  }
+
+  allItems = items;
+  buildDashboard(sheetsInfo);
+}
+
+// ===================== BUILD DASHBOARD =====================
+function buildDashboard(sheetsInfo) {
+  const today = new Date();
+  const todayStr = today.toLocaleDateString('ar-SA', {year:'numeric',month:'long',day:'numeric'});
+
+  document.getElementById('upload-screen').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+  document.getElementById('today-badge').textContent = '📅 اليوم: ' + todayStr;
+  document.getElementById('file-badge').textContent = '✅ ' + fileName;
+  document.getElementById('header-sub').textContent = `إجمالي المخزون: ${allItems.length.toLocaleString()} صنف | ${Object.keys(sheetsInfo).length} مواقع`;
+
+  // Sheet chips
+  const sheetInfoEl = document.getElementById('sheet-info');
+  sheetInfoEl.innerHTML = Object.entries(sheetsInfo).map(([name, count]) =>
+    `<div class="sheet-chip">${name} <span>${count}</span></div>`
+  ).join('');
+
+  // KPIs
+  const total = allItems.length;
+  const counts = {EXPIRED:0,Critical:0,Warning:0,Caution:0,OK:0};
+  allItems.forEach(i => counts[i.status]++);
+
+  document.getElementById('kpi-expired').textContent = counts.EXPIRED;
+  document.getElementById('kpi-critical').textContent = counts.Critical;
+  document.getElementById('kpi-warning').textContent = counts.Warning;
+  document.getElementById('kpi-caution').textContent = counts.Caution;
+  document.getElementById('kpi-ok').textContent = counts.OK;
+
+  const pct = v => ((v/total)*100).toFixed(1)+'% من الإجمالي';
+  document.getElementById('kpi-expired-pct').textContent = pct(counts.EXPIRED);
+  document.getElementById('kpi-critical-pct').textContent = pct(counts.Critical);
+  document.getElementById('kpi-warning-pct').textContent = pct(counts.Warning);
+  document.getElementById('kpi-caution-pct').textContent = pct(counts.Caution);
+  document.getElementById('kpi-ok-pct').textContent = pct(counts.OK);
+
+  // Update filter buttons
+  document.getElementById('btn-all').textContent = `الكل (${allItems.filter(i=>i.status!=='OK').length})`;
+  document.getElementById('btn-expired').textContent = `🔴 منتهي (${counts.EXPIRED})`;
+  document.getElementById('btn-critical').textContent = `🟠 حرج (${counts.Critical})`;
+  document.getElementById('btn-warning').textContent = `🟡 تحذير (${counts.Warning})`;
+  document.getElementById('btn-caution').textContent = `🔵 تنبيه (${counts.Caution})`;
+
+  buildDonut(counts, total);
+  buildLocationBars();
+  buildTimeline();
+  filterByStatus('ALL');
+}
+
+// ===================== DONUT =====================
+function buildDonut(counts, total) {
+  const data = [
+    {label:'سليم', val:counts.OK, color:'#26d987'},
+    {label:'تنبيه', val:counts.Caution, color:'#4fc3f7'},
+    {label:'تحذير', val:counts.Warning, color:'#f5c518'},
+    {label:'حرج', val:counts.Critical, color:'#ff7a1a'},
+    {label:'منتهي', val:counts.EXPIRED, color:'#ff3a5c'},
+  ];
+  const r=36, cx=50, cy=50, circ=2*Math.PI*r;
+  let offset = -circ/4;
+  const paths = data.map(d => {
+    const frac = total>0 ? d.val/total : 0;
+    const len = frac * circ;
+    const dash = `${len} ${circ-len}`;
+    const el = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${d.color}" stroke-width="16" stroke-dasharray="${dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    offset += len;
+    return el;
+  });
+  document.getElementById('donut-svg').innerHTML = `
+    <circle cx="50" cy="50" r="36" fill="none" stroke="#1a2235" stroke-width="16"/>
+    ${paths.join('')}
+    <text x="50" y="47" text-anchor="middle" fill="#e8eaf6" font-size="11" font-weight="700" font-family="IBM Plex Sans Arabic">${total.toLocaleString()}</text>
+    <text x="50" y="58" text-anchor="middle" fill="#7b8ba8" font-size="7" font-family="IBM Plex Sans Arabic">صنف</text>
+  `;
+  document.getElementById('donut-legend').innerHTML = data.map(d =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${d.color}"></div><span class="legend-name">${d.label}</span><span style="font-weight:600;color:${d.color}">${d.val}</span></div>`
+  ).join('');
+}
+
+// ===================== LOCATION BARS =====================
+function buildLocationBars() {
+  const nonOK = allItems.filter(i => i.status !== 'OK');
+  const counts = {};
+  nonOK.forEach(i => { counts[i.sheet] = (counts[i.sheet]||0)+1; });
+  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const max = sorted[0]?.[1] || 1;
+  const palette = ['#4fc3f7','#818cf8','#26d987','#f5c518','#ff7a1a','#ff3a5c','#a78bfa','#34d399','#fbbf24','#60a5fa'];
+  document.getElementById('location-bars').innerHTML = sorted.map(([sheet,count],i) => `
+    <div class="hbar">
+      <div class="hbar-label"><span>${sheet}</span><span>${count}</span></div>
+      <div class="hbar-track"><div class="hbar-fill" style="width:${count/max*100}%;background:${palette[i%palette.length]}"></div></div>
+    </div>
+  `).join('') || '<div style="color:var(--muted);font-size:0.8rem;text-align:center;padding:20px">لا توجد بيانات</div>';
+}
+
+// ===================== TIMELINE =====================
+function buildTimeline() {
+  const ranges = [[-9999,-1],[0,0],[1,30],[31,60],[61,90],[91,180]];
+  const cols = ['#ff3a5c','#ff7a1a','#ff7a1a','#f5c518','#4fc3f7','#26d987'];
+  const labels = ['منتهي','اليوم','30 يوم','60 يوم','90 يوم','180 يوم'];
+  const cnts = ranges.map(([a,b]) => allItems.filter(i=>i.days>=a&&i.days<=b).length);
+  const max = Math.max(...cnts,1);
+  document.getElementById('timeline-bars').innerHTML = cnts.map((c,i)=>`
+    <div class="tbar" style="height:${Math.max(3,c/max*66)}px;background:${cols[i]}" title="${labels[i]}: ${c}"></div>
+  `).join('');
+}
+
+// ===================== TABLE =====================
+function renderTable() {
+  const start = (currentPage-1)*PAGE_SIZE;
+  const page = filtered.slice(start, start+PAGE_SIZE);
+  const maxQty = Math.max(...filtered.map(i=>i.qty), 1);
+
+  document.getElementById('tableBody').innerHTML = page.length ? page.map((item,idx) => {
+    const sc = item.status==='EXPIRED'?'badge-expired':item.status==='Critical'?'badge-critical':item.status==='Warning'?'badge-warning':'badge-caution';
+    const dc = item.days<0?'days-expired':item.days<=30?'days-critical':item.days<=90?'days-warning':'days-caution';
+    const dLabel = item.days<0?`منذ ${Math.abs(item.days)} يوم`:item.days===0?'ينتهي اليوم':`${item.days} يوم`;
+    const sLabel = item.status==='EXPIRED'?'● منتهي':item.status==='Critical'?'● حرج':item.status==='Warning'?'● تحذير':'● تنبيه';
+    const tempIcon = !item.temp?'🌡':item.temp.includes('2-8')||item.temp.includes('Cold')?'❄️':item.temp.includes('-20')||item.temp.toLowerCase().includes('freez')?'🧊':'🌡';
+    const barColor = item.status==='EXPIRED'?'var(--expired)':item.status==='Critical'?'var(--critical)':item.status==='Warning'?'var(--warning)':'var(--caution)';
+    return `<tr>
+      <td style="color:var(--muted);font-size:0.72rem">${start+idx+1}</td>
+      <td>
+        <div style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${item.name}">${item.name||'—'}</div>
+        ${item.trade?`<div style="color:var(--muted);font-size:0.7rem;margin-top:1px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.trade}</div>`:''}
+      </td>
+      <td><span class="days-pill ${dc}">${dLabel}</span></td>
+      <td style="font-size:0.75rem;white-space:nowrap">${item.bbdStr}</td>
+      <td>
+        <div style="font-weight:600">${item.qty.toLocaleString()}</div>
+        <div style="height:5px;background:var(--surface2);border-radius:3px;margin-top:3px;overflow:hidden;width:50px">
+          <div style="height:100%;width:${Math.min(100,item.qty/maxQty*100)}%;background:${barColor};border-radius:3px"></div>
+        </div>
+      </td>
+      <td style="color:var(--muted);font-size:0.72rem">${item.uom||'—'}</td>
+      <td>
+        <span class="sheet-tag">${item.sheet}</span>
+        ${item.loc?`<div style="font-size:0.67rem;color:var(--muted);margin-top:2px">${item.loc}</div>`:''}
+      </td>
+      <td style="font-size:0.72rem;color:var(--muted)">${tempIcon} ${item.temp||'—'}</td>
+      <td><span class="status-badge ${sc}">${sLabel}</span></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="9"><div class="empty-state"><div class="e-icon">🔍</div><div>لا توجد نتائج</div></div></td></tr>`;
+
+  document.getElementById('tableCount').textContent = `يعرض ${Math.min(start+1, filtered.length)}–${Math.min(start+PAGE_SIZE, filtered.length)} من ${filtered.length} صنف`;
+  renderPagination();
+}
+
+function renderPagination() {
+  const pages = Math.ceil(filtered.length / PAGE_SIZE);
+  const pg = document.getElementById('pagination');
+  if(pages <= 1) { pg.innerHTML=''; return; }
+  const start = Math.max(1, currentPage-2);
+  const end = Math.min(pages, start+4);
+  let html = `<button class="pg-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?'disabled':''}>→ السابق</button>`;
+  for(let i=start;i<=end;i++) html += `<button class="pg-btn ${i===currentPage?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  html += `<button class="pg-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages?'disabled':''}>التالي ←</button>`;
+  html += `<span class="pg-info">صفحة ${currentPage} من ${pages}</span>`;
+  pg.innerHTML = html;
+}
+
+function goPage(p) {
+  const pages = Math.ceil(filtered.length / PAGE_SIZE);
+  if(p<1||p>pages) return;
+  currentPage = p;
+  renderTable();
+}
+
+function applyFilters() {
+  const search = document.getElementById('searchBox').value.toLowerCase();
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+  const fromMs = dateFrom ? new Date(dateFrom).getTime() : null;
+  const toMs = dateTo ? new Date(dateTo).setHours(23,59,59,999) : null;
+
+  filtered = allItems.filter(item => {
+    // Status filter
+    if(currentStatus === 'ALL') {
+      if(item.status === 'OK') return false;
+    } else {
+      if(item.status !== currentStatus) return false;
+    }
+    // Date range filter on BBD
+    if(fromMs !== null && item.bbd.getTime() < fromMs) return false;
+    if(toMs !== null && item.bbd.getTime() > toMs) return false;
+    // Search filter
+    if(search) {
+      return item.name.toLowerCase().includes(search) ||
+             item.trade.toLowerCase().includes(search) ||
+             item.sheet.toLowerCase().includes(search) ||
+             item.loc.toLowerCase().includes(search);
+    }
+    return true;
+  });
+
+  filtered.sort((a,b) => {
+    let av, bv;
+    if(sortCol==='days') { av=a.days; bv=b.days; }
+    else if(sortCol==='qty') { av=a.qty; bv=b.qty; }
+    else if(sortCol==='bbd') { av=a.bbd; bv=b.bbd; }
+    else { av=a.name.toLowerCase(); bv=b.name.toLowerCase(); }
+    return av<bv?-sortDir:av>bv?sortDir:0;
+  });
+
+  // Update date filter indicator badge
+  const indicator = document.getElementById('dateFilterIndicator');
+  if(dateFrom || dateTo) {
+    document.getElementById('dateFilterText').textContent = `📅 ${dateFrom||'—'}  ←  ${dateTo||'—'}`;
+    document.getElementById('dateFilterCount').textContent = `${filtered.length} صنف`;
+    indicator.style.display = 'flex';
+  } else {
+    indicator.style.display = 'none';
+  }
+
+  currentPage = 1;
+  renderTable();
+}
+
+function clearDateFilter() {
+  document.getElementById('dateFrom').value = '';
+  document.getElementById('dateTo').value = '';
+  applyFilters();
+}
+
+function setPreset(daysFrom, daysTo) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const from = new Date(today); from.setDate(from.getDate() + daysFrom);
+  const to = new Date(today);   to.setDate(to.getDate() + daysTo);
+  document.getElementById('dateFrom').value = from.toISOString().split('T')[0];
+  document.getElementById('dateTo').value   = to.toISOString().split('T')[0];
+  currentStatus = 'ALL';
+  ['all','expired','critical','warning','caution'].forEach(k => document.getElementById('btn-'+k)?.classList.remove('active'));
+  document.getElementById('btn-all')?.classList.add('active');
+  applyFilters();
+}
+
+function setPresetExpired() {
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  document.getElementById('dateFrom').value = '2018-01-01';
+  document.getElementById('dateTo').value = yesterday.toISOString().split('T')[0];
+  currentStatus = 'ALL';
+  ['all','expired','critical','warning','caution'].forEach(k => document.getElementById('btn-'+k)?.classList.remove('active'));
+  document.getElementById('btn-all')?.classList.add('active');
+  applyFilters();
+}
+
+// ===================== EXPORT TO EXCEL (Template Style) =====================
+function exportToExcel() {
+  if(!filtered.length) { alert('لا توجد بيانات للتصدير!'); return; }
+
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo   = document.getElementById('dateTo').value;
+  const today    = new Date();
+  const todayStr = `${String(today.getDate()).padStart(2,'0')}/${String(today.getMonth()+1).padStart(2,'0')}/${today.getFullYear()}`;
+  const fromLabel = dateFrom || '—';
+  const toLabel   = dateTo   || '—';
+
+  // ── Helpers ──────────────────────────────────────────────
+  const C = (bg, fc, bold, sz, ha, va, wrap, border) => ({
+    fill:  { patternType:'solid', fgColor:{ rgb: bg } },
+    font:  { name:'Arial', bold:!!bold, sz: sz||10, color:{ rgb: fc||'FF000000' } },
+    alignment: { horizontal:ha||'center', vertical:va||'center', wrapText:!!wrap, readingOrder:2 },
+    border: border ? {
+      top:{style:'thin',color:{rgb:'FFD0D0D0'}}, bottom:{style:'thin',color:{rgb:'FFD0D0D0'}},
+      left:{style:'thin',color:{rgb:'FFD0D0D0'}}, right:{style:'thin',color:{rgb:'FFD0D0D0'}}
+    } : {}
+  });
+
+  // Colour palette (exact match to template)
+  const DARK   = 'FF0D1B2E';
+  const WHITE  = 'FFFFFFFF';
+  const WARN_BG= 'FFFFF8E7';
+  const WARN_FC= 'FFFFB000';
+  const NE_HDR = 'FFC0392B';  // red header for NEAR_EXPIRY sheet
+  const NE_SUB = 'FFFEF0EF';
+  const NE_ROW = 'FFFEF0EF';
+  const AL_ODD = 'FFFFFBEA';
+  const SM_ODD = 'FFF7FBFF';
+  const SM_EVN = 'FFFFFFFF';
+  const LOC_OD = 'FFFFFFFF';
+  const LOC_EV = 'FFF7FBFF';
+  const SM_FC  = 'FF0D1B2E';
+
+  const statusLabel = s =>
+    s==='EXPIRED'  ? '🔴 منتهي الصلاحية' :
+    s==='Critical' ? '🟠 حرج (< 30 يوم)' :
+    s==='Warning'  ? '🟡 تحذير (31-90 يوم)' : '🔵 تنبيه (91-180 يوم)';
+
+  const agingLabel = s =>
+    s==='EXPIRED'  ? '🔴 منتهي' :
+    s==='Critical' ? '🔴 أقل من شهر' :
+    s==='Warning'  ? '🟡 1-3 أشهر' : '🔵 3-6 أشهر';
+
+  const wb = XLSX.utils.book_new();
+
+  // ══════════════════════════════════════════════════════════
+  // 1. SUMMARY sheet
+  // ══════════════════════════════════════════════════════════
+  const cntE = filtered.filter(i=>i.status==='EXPIRED').length;
+  const cntC = filtered.filter(i=>i.status==='Critical').length;
+  const cntW = filtered.filter(i=>i.status==='Warning').length;
+  const cntA = filtered.filter(i=>i.status==='Caution').length;
+  const totQty = filtered.reduce((s,i)=>s+i.qty,0);
+
+  const smData = [
+    ['📦 ملخص المخزون — تقرير الأصناف المُصدَّرة'],
+    [`⚠ نطاق التاريخ: ${fromLabel}  ←  ${toLabel}  |  تاريخ التصدير: ${todayStr}`],
+    ['المؤشر | KPI','القيمة | Value','ملاحظات | Notes'],
+    ['إجمالي الأصناف المُصدَّرة | Total Exported', filtered.length, ''],
+    ['إجمالي الكمية | Total Qty', totQty, ''],
+    ['🔴 منتهي الصلاحية | Expired', cntE, ''],
+    ['🟠 حرج — أقل من 30 يوم | Critical', cntC, ''],
+    ['🟡 تحذير — 31 إلى 90 يوم | Warning', cntW, ''],
+    ['🔵 تنبيه — 91 إلى 180 يوم | Caution', cntA, ''],
+    ['','',''],
+    ['من تاريخ | Date From', fromLabel, ''],
+    ['إلى تاريخ | Date To', toLabel, ''],
+    ['تاريخ التصدير | Export Date', todayStr, ''],
+  ];
+
+  const wsS = XLSX.utils.aoa_to_sheet(smData);
+  wsS['!cols'] = [{wch:40},{wch:18},{wch:28}];
+  wsS['!rows'] = [{hpt:28},{hpt:18},{hpt:22}];
+  wsS['!merges'] = [{s:{r:0,c:0},e:{r:0,c:2}},{s:{r:1,c:0},e:{r:1,c:2}}];
+
+  // apply styles
+  const smStyles = [
+    ['A1', C(DARK,WHITE,true,13,'center','center',false,false)],
+    ['A2', C(WARN_BG,WARN_FC,false,10,'center',null,false,false)],
+    ['A3', C(DARK,WHITE,true,10,'center','center',true,true)],
+    ['B3', C(DARK,WHITE,true,10,'center','center',true,true)],
+    ['C3', C(DARK,WHITE,true,10,'center','center',true,true)],
+  ];
+  smStyles.forEach(([addr,s])=>{ if(wsS[addr]) wsS[addr].s=s; });
+  for(let r=3; r<smData.length; r++){
+    const bg = r%2===0 ? SM_ODD : SM_EVN;
+    ['A','B','C'].forEach(col=>{
+      const addr = col+(r+1);
+      if(!wsS[addr]) wsS[addr]={t:'z'};
+      const isVal = col==='B', isKey = col==='A';
+      wsS[addr].s = C(bg, isVal?SM_FC:null, isKey, 10,
+        isVal?'center':'right', 'center', false, true);
+    });
+  }
+  XLSX.utils.book_append_sheet(wb, wsS, 'SUMMARY');
+
+  // ══════════════════════════════════════════════════════════
+  // 2. NEAR_EXPIRY sheet  (exact template format)
+  // ══════════════════════════════════════════════════════════
+  const neCount = filtered.length;
+  const neExpired = cntE;
+  const neHeader2 = `📅 تاريخ اليوم: ${todayStr}  |  أصناف مُصدَّرة: ${neCount}  |  منتهية فعلاً: ${neExpired}`;
+
+  const neRows = [
+    [`⚠ Near Expiry Items — أصناف قريبة الانتهاء (نطاق: ${fromLabel} ← ${toLabel})`],
+    [neHeader2],
+    ['Item No','Description','BBD','Days Left','Avail Qty','Location','Aging Profile','Status'],
+    ...filtered.map(i=>[
+      i.itemNo||'',
+      i.name,
+      i.bbdStr,
+      i.days,
+      i.qty,
+      i.loc,
+      agingLabel(i.status),
+      statusLabel(i.status)
+    ])
+  ];
+
+  const wsNE = XLSX.utils.aoa_to_sheet(neRows);
+  wsNE['!cols'] = [{wch:18},{wch:42},{wch:14},{wch:12},{wch:12},{wch:18},{wch:14},{wch:22}];
+  wsNE['!rows'] = [{hpt:28},{hpt:18},{hpt:22}];
+  wsNE['!merges'] = [{s:{r:0,c:0},e:{r:0,c:7}},{s:{r:1,c:0},e:{r:1,c:7}}];
+
+  // Row 1 – red title
+  ['A1'].forEach(a=>{ if(wsNE[a]) wsNE[a].s=C(NE_HDR,WHITE,true,13,'center','center',false,false); });
+  // Row 2 – light pink sub
+  ['A2'].forEach(a=>{ if(wsNE[a]) wsNE[a].s=C(NE_SUB,NE_HDR,true,11,'center',null,false,false); });
+  // Row 3 – dark header
+  ['A3','B3','C3','D3','E3','F3','G3','H3'].forEach(a=>{
+    if(wsNE[a]) wsNE[a].s=C(DARK,WHITE,true,10,'center','center',true,true);
+  });
+  // Data rows
+  const neCols = ['A','B','C','D','E','F','G','H'];
+  for(let r=3; r<neRows.length; r++){
+    neCols.forEach((col,ci)=>{
+      const addr=col+(r+1);
+      if(!wsNE[addr]) wsNE[addr]={t:'z'};
+      wsNE[addr].s=C(NE_ROW,null,ci===7,9,
+        ci===1?'left':'center','center',false,true);
+      // highlight expired rows differently
+      if(filtered[r-3]?.status==='EXPIRED'){
+        wsNE[addr].s.fill={patternType:'solid',fgColor:{rgb:'FFFFE0E0'}};
+      }
+    });
+  }
+  XLSX.utils.book_append_sheet(wb, wsNE, 'NEAR_EXPIRY');
+
+  // ══════════════════════════════════════════════════════════
+  // 3. ALL_ITEMS sheet
+  // ══════════════════════════════════════════════════════════
+  const aiRows = [
+    ['📦 Exported Items — Items, Location & Expiry'],
+    ['⚠ Exported from Dashboard — do not change column names'],
+    ['Item No','Description','UOM','Avail Qty','BBD','Days to Expiry','Location','Aging Profile','Status'],
+    ...filtered.map(i=>[
+      i.itemNo||'',
+      i.name,
+      i.uom,
+      i.qty,
+      i.bbdStr,
+      i.days,
+      i.loc,
+      agingLabel(i.status),
+      i.status==='EXPIRED'?'⚠ منتهي':i.status==='Critical'?'⚠ عاجل':i.status==='Warning'?'⏳ قريباً':'🔵 تنبيه'
+    ])
+  ];
+
+  const wsAI = XLSX.utils.aoa_to_sheet(aiRows);
+  wsAI['!cols'] = [{wch:18},{wch:42},{wch:8},{wch:12},{wch:14},{wch:14},{wch:18},{wch:14},{wch:14}];
+  wsAI['!rows'] = [{hpt:28},{hpt:18},{hpt:22}];
+  wsAI['!merges'] = [{s:{r:0,c:0},e:{r:0,c:8}},{s:{r:1,c:0},e:{r:1,c:8}}];
+
+  ['A1'].forEach(a=>{ if(wsAI[a]) wsAI[a].s=C(DARK,WHITE,true,13,'center','center',false,false); });
+  ['A2'].forEach(a=>{ if(wsAI[a]) wsAI[a].s=C(WARN_BG,WARN_FC,false,10,'center',null,false,false); });
+  ['A3','B3','C3','D3','E3','F3','G3','H3','I3'].forEach(a=>{
+    if(wsAI[a]) wsAI[a].s=C(DARK,WHITE,true,10,'center','center',true,true);
+  });
+  const aiCols=['A','B','C','D','E','F','G','H','I'];
+  for(let r=3;r<aiRows.length;r++){
+    aiCols.forEach((col,ci)=>{
+      const addr=col+(r+1);
+      if(!wsAI[addr]) wsAI[addr]={t:'z'};
+      wsAI[addr].s=C(AL_ODD,null,false,9,ci===1?'left':'center','center',false,true);
+      if(filtered[r-3]?.status==='EXPIRED'){
+        wsAI[addr].s.fill={patternType:'solid',fgColor:{rgb:'FFFFE0E0'}};
+      }
+    });
+  }
+  XLSX.utils.book_append_sheet(wb, wsAI, 'ALL_ITEMS');
+
+  // ══════════════════════════════════════════════════════════
+  // 4. BY_LOCATION sheet
+  // ══════════════════════════════════════════════════════════
+  const locMap={};
+  filtered.forEach(i=>{
+    if(!locMap[i.loc]) locMap[i.loc]={count:0,qty:0,nearExp:0};
+    locMap[i.loc].count++;
+    locMap[i.loc].qty+=i.qty;
+    if(i.status!=='OK') locMap[i.loc].nearExp++;
+  });
+  const locSorted=Object.entries(locMap).sort((a,b)=>b[1].qty-a[1].qty);
+
+  const byLocRows=[
+    ['📍 Items by Location — حسب الموقع'],
+    ['Location','Items Count','Total Qty','Near Expiry'],
+    ...locSorted.map(([loc,d])=>[loc,d.count,d.qty,d.nearExp])
+  ];
+  const wsLoc=XLSX.utils.aoa_to_sheet(byLocRows);
+  wsLoc['!cols']=[{wch:22},{wch:14},{wch:14},{wch:14}];
+  wsLoc['!rows']=[{hpt:24}];
+  wsLoc['!merges']=[{s:{r:0,c:0},e:{r:0,c:3}}];
+  ['A1'].forEach(a=>{ if(wsLoc[a]) wsLoc[a].s=C(DARK,WHITE,true,12,'center','center',false,false); });
+  ['A2','B2','C2','D2'].forEach(a=>{ if(wsLoc[a]) wsLoc[a].s=C(DARK,WHITE,true,10,'center','center',true,true); });
+  const locCols=['A','B','C','D'];
+  for(let r=2;r<byLocRows.length;r++){
+    const bg=r%2===0?LOC_OD:LOC_EV;
+    locCols.forEach(col=>{
+      const addr=col+(r+1);
+      if(!wsLoc[addr]) wsLoc[addr]={t:'z'};
+      wsLoc[addr].s=C(bg,null,false,10,'center','center',false,true);
+    });
+  }
+  XLSX.utils.book_append_sheet(wb, wsLoc, 'BY_LOCATION');
+
+  // ══════════════════════════════════════════════════════════
+  // 5. تعليمات sheet
+  // ══════════════════════════════════════════════════════════
+  const instrRows=[
+    ['📋','كيفية الاستخدام:'],
+    ['',''],
+    ['1','شيت SUMMARY — ملخص الأصناف المُصدَّرة والإحصائيات'],
+    ['2','شيت NEAR_EXPIRY — الأصناف ضمن النطاق الزمني المحدد مع تفاصيل الانتهاء'],
+    ['3','شيت ALL_ITEMS — كل الأصناف مع الكمية والموقع وتاريخ الانتهاء'],
+    ['4','شيت BY_LOCATION — توزيع الأصناف حسب الموقع'],
+    ['',''],
+    ['⚠','لا تغيّر أسماء الأعمدة إذا أردت استخدام الملف مع داشبورد آخر'],
+    ['📅',`تاريخ التصدير: ${todayStr}  |  نطاق: ${fromLabel} ← ${toLabel}`],
+  ];
+  const wsInstr=XLSX.utils.aoa_to_sheet(instrRows);
+  wsInstr['!cols']=[{wch:5},{wch:65}];
+  instrRows.forEach((_,ri)=>{
+    const a1='A'+(ri+1), a2='B'+(ri+1);
+    if(wsInstr[a1]) wsInstr[a1].s={ font:{name:'Arial',bold:true,sz:11,color:{rgb:'FF00B8D9'}}, alignment:{horizontal:'center'} };
+    if(wsInstr[a2]) wsInstr[a2].s={ font:{name:'Arial',sz:10}, alignment:{horizontal:'right',readingOrder:2} };
+  });
+  XLSX.utils.book_append_sheet(wb, wsInstr, 'تعليمات');
+
+  // ── Save ─────────────────────────────────────────────────
+  const fromPart = dateFrom || 'all';
+  const toPart   = dateTo   || 'all';
+  XLSX.writeFile(wb, `inventory_report_${fromPart}_to_${toPart}.xlsx`);
+}
+
+function filterByStatus(s) {
+  currentStatus = s;
+  ['all','expired','critical','warning','caution'].forEach(k => document.getElementById('btn-'+k)?.classList.remove('active'));
+  const map = {ALL:'all',EXPIRED:'expired',Critical:'critical',Warning:'warning',Caution:'caution'};
+  document.getElementById('btn-'+(map[s]||'all'))?.classList.add('active');
+  applyFilters();
+}
+
+function sortBy(col) {
+  if(sortCol===col) sortDir*=-1; else { sortCol=col; sortDir=1; }
+  applyFilters();
+}
+
+function resetToUpload() {
+  allItems = [];
+  filtered = [];
+  currentStatus = 'ALL';
+  currentPage = 1;
+  document.getElementById('file-input').value = '';
+  document.getElementById('error-msg').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('upload-screen').style.display = 'flex';
+}
+</script>
+</body>
+</html>
